@@ -313,6 +313,7 @@ def apply_action(action, duty):
 
 
 def main():
+    pi.hardware_PWM(PWM_PIN, PWM_FREQ_HZ, 0)
     device_uuid = get_or_create_uuid(UUID_FILE)
     print(f"Device UUID: {device_uuid}")
 
