@@ -46,7 +46,59 @@ def load_config(path):
 CONFIG_PATH = sys.argv[1] if len(sys.argv) > 1 else "fan_config.json"
 config = load_config(CONFIG_PATH)
 
-BASE_URL = config["server"]["baseUrl"].rstrip("/")
+NETWORK_LIST_PATH = sys.argv[2] if len(sys.argv) > 2 else "networkList.txt"
+SERVER_PORT = config["server"].get("port", 3000)
+
+_base_url = None
+_base_url_lock = threading.Lock()
+
+
+def _probe(url):
+    try:
+        r = requests.get(f"{url}/", timeout=REQUEST_TIMEOUT)
+        return r.status_code == 200
+    except requests.exceptions.RequestException:
+        return False
+
+
+def discover_backend():
+    """Keep using the current backend if it still answers; only rescan
+    networkList.txt if it's gone quiet. Mirrors sensorVPD.client's
+    discover_backend so a working link isn't rescanned every cycle."""
+    global _base_url
+
+    with _base_url_lock:
+        current = _base_url
+
+    if current is not None and _probe(current):
+        return current
+
+    try:
+        with open(NETWORK_LIST_PATH) as f:
+            candidates = [line.strip() for line in f if line.strip()]
+    except FileNotFoundError:
+        print(f"{NETWORK_LIST_PATH} not found")
+        return current
+
+    for ip in candidates:
+        url = f"http://{ip}:{SERVER_PORT}"
+        if _probe(url):
+            with _base_url_lock:
+                if url != _base_url:
+                    print(f"Backend discovered: {url}")
+                _base_url = url
+            return url
+
+    print("No reachable backend in networkList.txt")
+    with _base_url_lock:
+        _base_url = None
+    return None
+
+
+def get_base_url():
+    with _base_url_lock:
+        return _base_url
+      
 REQUEST_TIMEOUT = config["server"].get("requestTimeoutSeconds", 5)
 
 ACTUATOR_TYPE = config["actuator"]["actuatorType"]
@@ -127,7 +179,7 @@ def register_actuator(device_uuid, retries=None, retry_delay=10):
         attempt += 1
         try:
             r = requests.post(
-                f"{BASE_URL}/api/registerActuator",
+                f"{get_base_url()}/api/registerActuator",
                 json={
                     "deviceUUID": device_uuid,
                     "actuatorType": ACTUATOR_TYPE,
@@ -156,7 +208,7 @@ def fetch_command(actuator_id):
     once, rather than trusting every caller to remember."""
     try:
         r = requests.get(
-            f"{BASE_URL}/api/actuatorCommand",
+            f"{get_base_url()}/api/actuatorCommand",
             params={"actuatorID": actuator_id},
             timeout=REQUEST_TIMEOUT,
         )
@@ -175,7 +227,7 @@ def fetch_command(actuator_id):
 def report_status(actuator_id, duty_percent, pulse_count_snapshot, rpm):
     try:
         r = requests.post(
-            f"{BASE_URL}/api/actuatorStatus",
+            f"{get_base_url()}/api/actuatorStatus",
             json={
                 "actuatorID": actuator_id,
                 "pwmDutyPercent": duty_percent,
