@@ -170,16 +170,18 @@ def measure_rpm(window_seconds):
 # BACKEND API
 # ===========================================================================
 
-
 def register_actuator(device_uuid, retries=None, retry_delay=10):
-    """Find-or-create this actuator on the backend. Retries (default:
-    forever) since the server may not be reachable yet when the Pi boots."""
     attempt = 0
     while retries is None or attempt < retries:
         attempt += 1
+        base_url = discover_backend()          # <-- was get_base_url()
+        if base_url is None:
+            print(f"No backend reachable (attempt {attempt}), retrying...")
+            time.sleep(retry_delay)
+            continue
         try:
             r = requests.post(
-                f"{get_base_url()}/api/registerActuator",
+                f"{base_url}/api/registerActuator",
                 json={
                     "deviceUUID": device_uuid,
                     "actuatorType": ACTUATOR_TYPE,
@@ -202,13 +204,12 @@ def register_actuator(device_uuid, retries=None, retry_delay=10):
 
 
 def fetch_command(actuator_id):
-    """Returns (action, pwmDutyPercent) or None on request failure.
-    pwmDutyPercent comes back as a string from the backend - mysql2 returns
-    DECIMAL columns as strings by default - so it's cast to float here,
-    once, rather than trusting every caller to remember."""
+    base_url = discover_backend()               # <-- was get_base_url()
+    if base_url is None:
+        return None
     try:
         r = requests.get(
-            f"{get_base_url()}/api/actuatorCommand",
+            f"{base_url}/api/actuatorCommand",
             params={"actuatorID": actuator_id},
             timeout=REQUEST_TIMEOUT,
         )
