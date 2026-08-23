@@ -23,6 +23,11 @@ ls /usr/local/lib | grep pigpio
 ```
 You should see a path like /usr/local/bin/pigpiod and library files like libpigpio.so.
 
+Start the daemon
+```
+sudo pigpiod
+```
+
 2. Verify it's running
 ```
 pigs t
