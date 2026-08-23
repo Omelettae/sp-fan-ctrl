@@ -1,0 +1,16 @@
+[Unit]
+Description=Fan PWM control + tach reporting service
+After=network-online.target pigpiod.service
+Wants=network-online.target
+Requires=pigpiod.service
+
+[Service]
+Type=simple
+User=pi4-2
+WorkingDirectory=/home/pi4-2
+ExecStart=/usr/bin/python3 /home/pi4-2/real_fanapi_test.py
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
