@@ -2,6 +2,11 @@
 sp fan ctrl for AUB0912VH-CX09 fan
 
 ```
+sudo nano /etc/systemd/system/pigpiod.service
+sudo nano /etc/systemd/system/real_fanapi_test.service
+```
+
+```
 sudo apt update
 sudo apt install pigpio python3-pigpio
 ```
