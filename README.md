@@ -4,7 +4,9 @@ sp fan ctrl
 ```
 sudo apt update
 sudo apt install pigpio python3-pigpio
+```
 
+```
 cd ~
 sudo apt update
 sudo apt install git build-essential -y
