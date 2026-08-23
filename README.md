@@ -14,10 +14,41 @@ git clone https://github.com/joan2937/pigpio.git
 cd pigpio
 make
 sudo make install
-
 ```
 
-Why pigpio
+1. Check if the library and binaries exist
+```
+which pigpiod
+ls /usr/local/lib | grep pigpio
+```
+You should see a path like /usr/local/bin/pigpiod and library files like libpigpio.so.
+
+2. Verify it's running
+```
+pigs t
+```
+
+If this prints a number (a tick count), the daemon is alive and ready.
+
+3. Install the Python bindings (if not already)
+
+Since you built from source, the C library is installed, but you still need the Python wrapper:
+```
+sudo apt update
+sudo apt install python3-pip python3-venv
+```
+```
+python3 -m venv ~/venv
+source ~/venv/bin/activate
+```
+
+```
+pip install pigpio
+```
+
+
+
+# Why pigpio
 
 This project uses pigpio instead of RPi.GPIO or lgpio for PWM fan control, for these reasons:
 
