@@ -1,10 +1,10 @@
 # sp-fan-ctrl
-sp fan ctrl for AUB0912VH-CX09 fan
-
 ```
 sudo nano /etc/systemd/system/pigpiod.service
 sudo nano /etc/systemd/system/real_fanapi_test.service
 ```
+
+sp fan ctrl for AUB0912VH-CX09 fan
 
 ```
 sudo apt update
