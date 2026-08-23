@@ -10,8 +10,8 @@ import time
 
 import pigpio
 
-import actuatorVPD
-from actuatorVPD import configReader
+import actuator
+from actuator import configReader
 
 config = configReader.readConfig()
 
@@ -49,7 +49,7 @@ def handle_stop(signum, frame):
 signal.signal(signal.SIGTERM, handle_stop)
 signal.signal(signal.SIGINT, handle_stop)
 
-client = actuatorVPD.ActuatorClient(config)
+client = actuator.ActuatorClient(config)
 client.start()
 print(f"Fan control started (PWM gpio {PWM_PIN}, tach gpio {TACH_PIN})")
 
