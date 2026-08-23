@@ -1,0 +1,26 @@
+{
+  "server": {
+    "baseUrl": "http://192.168.1.50:3000",
+    "requestTimeoutSeconds": 5
+  },
+  "actuator": {
+    "actuatorType": "FAN",
+    "locationName": "greenhouse-1",
+    "actuatorName": "fan4-1",
+    "description": "Exhaust fan on pi4-1"
+  },
+  "uuid": {
+    "filePath": "fan_uuid.txt"
+  },
+  "hardware": {
+    "pwmPin": 18,
+    "tachPin": 24,
+    "pwmFrequencyHz": 25000,
+    "pulsesPerRevolution": 2
+  },
+  "polling": {
+    "commandPollSeconds": 5,
+    "statusReportSeconds": 15,
+    "rpmMeasurementWindowSeconds": 1
+  }
+}
