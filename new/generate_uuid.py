@@ -40,6 +40,6 @@ def get_or_create_uuid(path):
 
 
 if __name__ == "__main__":
-    target = sys.argv[1] if len(sys.argv) > 1 else "fan_uuid.txt"
+    target = sys.argv[1] if len(sys.argv) > 1 else "device_uuid.txt"
     result = get_or_create_uuid(target)
     print(f"UUID ({target}): {result}")
