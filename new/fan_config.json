@@ -1,6 +1,6 @@
 {
   "server": {
-    "baseUrl": "http://192.168.1.50:3000",
+    "port": 5000,
     "requestTimeoutSeconds": 5
   },
   "actuator": {
@@ -10,7 +10,7 @@
     "description": "Exhaust fan on pi4-1"
   },
   "uuid": {
-    "filePath": "fan_uuid.txt"
+    "filePath": "device_uuid.txt"
   },
   "hardware": {
     "pwmPin": 18,
