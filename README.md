@@ -2,6 +2,7 @@
 sp fan ctrl
 
 ```
+sudo apt update
 sudo apt install pigpio python3-pigpio
 
 cd ~
