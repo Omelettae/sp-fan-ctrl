@@ -2,9 +2,19 @@
 """
 fantest.py - fan control + tach reading, wired up to the backend API.
 
+Backend discovery mirrors sensorVPD.client.BackendClient.discover_backend:
+each candidate IP in networkList.txt is tried in order, and once one answers
+it keeps being used - only rescanned if it stops responding. This is the
+same pattern dht22.py/C5A.py already use, just inlined here rather than
+pulled in as a package import.
+
+device_uuid.txt is shared with the sensor scripts on this Pi (see
+config["uuid"]["filePath"]) - one Pi, one device identity, whether it's
+running a sensor or the fan. registerActuator resolves this UUID to a
+deviceID server-side the same way registerSensor does.
+
 On startup this finds-or-creates its Actuator row on the backend (via
-/api/registerActuator, keyed on a UUID that persists across reboots - see
-generate_uuid.py), then:
+/api/registerActuator, keyed on the shared device UUID), then:
   - polls /api/actuatorCommand every commandPollSeconds for the latest
     command and applies it to the PWM pin:
       OFF        -> duty 0
@@ -19,8 +29,11 @@ Requires: pip install pigpio requests
 Requires the pigpio daemon running: sudo pigpiod
 
 Config: fan_config.json in the same directory, or pass a path as argv[1].
+networkList.txt (candidate backend IPs, one per line) in the same directory,
+or pass a path as argv[2].
     python3 fantest.py
     python3 fantest.py /path/to/other_config.json
+    python3 fantest.py /path/to/other_config.json /path/to/other_networkList.txt
 """
 
 import json
@@ -47,7 +60,32 @@ CONFIG_PATH = sys.argv[1] if len(sys.argv) > 1 else "fan_config.json"
 config = load_config(CONFIG_PATH)
 
 NETWORK_LIST_PATH = sys.argv[2] if len(sys.argv) > 2 else "networkList.txt"
-SERVER_PORT = config["server"].get("port", 3000)
+SERVER_PORT = config["server"].get("port", 5000)
+REQUEST_TIMEOUT = config["server"].get("requestTimeoutSeconds", 5)
+
+ACTUATOR_TYPE = config["actuator"]["actuatorType"]
+LOCATION_NAME = config["actuator"]["locationName"]
+ACTUATOR_NAME = config["actuator"].get("actuatorName")
+DESCRIPTION = config["actuator"].get("description")
+
+UUID_FILE = config["uuid"]["filePath"]
+
+PWM_PIN = config["hardware"]["pwmPin"]
+TACH_PIN = config["hardware"]["tachPin"]
+PWM_FREQ_HZ = config["hardware"].get("pwmFrequencyHz", 25000)
+PULSES_PER_REV = config["hardware"].get("pulsesPerRevolution", 2)
+# The duty applied for a plain ON command - fixed, not derived from whatever
+# duty a previous SET_SPEED happened to leave behind.
+ON_DUTY_PERCENT = config["hardware"].get("onDutyPercent", 100)
+
+COMMAND_POLL_SECONDS = config["polling"].get("commandPollSeconds", 5)
+STATUS_REPORT_SECONDS = config["polling"].get("statusReportSeconds", 15)
+RPM_WINDOW_SECONDS = config["polling"].get("rpmMeasurementWindowSeconds", 1)
+
+
+# ===========================================================================
+# BACKEND DISCOVERY
+# ===========================================================================
 
 _base_url = None
 _base_url_lock = threading.Lock()
@@ -63,8 +101,8 @@ def _probe(url):
 
 def discover_backend():
     """Keep using the current backend if it still answers; only rescan
-    networkList.txt if it's gone quiet. Mirrors sensorVPD.client's
-    discover_backend so a working link isn't rescanned every cycle."""
+    networkList.txt if it's gone quiet. base_url already includes the
+    scheme (http://ip:port) - never prefix it again when building a request."""
     global _base_url
 
     with _base_url_lock:
@@ -98,27 +136,6 @@ def discover_backend():
 def get_base_url():
     with _base_url_lock:
         return _base_url
-      
-REQUEST_TIMEOUT = config["server"].get("requestTimeoutSeconds", 5)
-
-ACTUATOR_TYPE = config["actuator"]["actuatorType"]
-LOCATION_NAME = config["actuator"]["locationName"]
-ACTUATOR_NAME = config["actuator"].get("actuatorName")
-DESCRIPTION = config["actuator"].get("description")
-
-UUID_FILE = config["uuid"]["filePath"]
-
-PWM_PIN = config["hardware"]["pwmPin"]
-TACH_PIN = config["hardware"]["tachPin"]
-PWM_FREQ_HZ = config["hardware"].get("pwmFrequencyHz", 25000)
-PULSES_PER_REV = config["hardware"].get("pulsesPerRevolution", 2)
-# The duty applied for a plain ON command - fixed, not derived from whatever
-# duty a previous SET_SPEED happened to leave behind.
-ON_DUTY_PERCENT = config["hardware"].get("onDutyPercent", 100)
-
-COMMAND_POLL_SECONDS = config["polling"].get("commandPollSeconds", 5)
-STATUS_REPORT_SECONDS = config["polling"].get("statusReportSeconds", 15)
-RPM_WINDOW_SECONDS = config["polling"].get("rpmMeasurementWindowSeconds", 1)
 
 
 # ===========================================================================
@@ -170,11 +187,14 @@ def measure_rpm(window_seconds):
 # BACKEND API
 # ===========================================================================
 
+
 def register_actuator(device_uuid, retries=None, retry_delay=10):
+    """Find-or-create this actuator on the backend. Retries (default:
+    forever) since the server may not be reachable yet when the Pi boots."""
     attempt = 0
     while retries is None or attempt < retries:
         attempt += 1
-        base_url = discover_backend()          # <-- was get_base_url()
+        base_url = discover_backend()
         if base_url is None:
             print(f"No backend reachable (attempt {attempt}), retrying...")
             time.sleep(retry_delay)
@@ -204,7 +224,11 @@ def register_actuator(device_uuid, retries=None, retry_delay=10):
 
 
 def fetch_command(actuator_id):
-    base_url = discover_backend()               # <-- was get_base_url()
+    """Returns (action, pwmDutyPercent) or None on request failure.
+    pwmDutyPercent comes back as a string from the backend - mysql2 returns
+    DECIMAL columns as strings by default - so it's cast to float here,
+    once, rather than trusting every caller to remember."""
+    base_url = discover_backend()
     if base_url is None:
         return None
     try:
@@ -226,9 +250,12 @@ def fetch_command(actuator_id):
 
 
 def report_status(actuator_id, duty_percent, pulse_count_snapshot, rpm):
+    base_url = get_base_url()
+    if base_url is None:
+        return
     try:
         r = requests.post(
-            f"{get_base_url()}/api/actuatorStatus",
+            f"{base_url}/api/actuatorStatus",
             json={
                 "actuatorID": actuator_id,
                 "pwmDutyPercent": duty_percent,
