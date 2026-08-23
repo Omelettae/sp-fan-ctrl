@@ -1,6 +1,0 @@
-Type: FAN
-Location: Greenhouse North
-Name: Fan #1
-description: intake fan, north wall
-PWM_GPIO: 18
-TACH_GPIO: 24
